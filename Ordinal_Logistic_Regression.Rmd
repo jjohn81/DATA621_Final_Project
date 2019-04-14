@@ -1,0 +1,61 @@
+---
+title: "CUNY621_FinalProject"
+author: "Zachary Herold"
+date: "April 14, 2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(MASS)
+```
+
+#### Loading the data
+
+```{r}
+white <- data.frame(read.csv("https://raw.githubusercontent.com/jjohn81/DATA621_Final_Project/master/winequality-white.csv", sep = ";"))
+```
+
+
+The following is the breakdown by quality rating. 
+
+```{r}
+table(factor(white$quality))
+```
+
+Consider consolidating the wines into five ordinal categories. 
+
+inferior = 3,4
+subpar = 5
+average = 6
+abovepar = 7
+superior = 8,9
+
+
+## Ordinal Logistic Regression
+```{r wines}
+m1 <- polr(factor(quality) ~., data=white, Hess=TRUE)
+summary(m1)
+```
+
+This regression output coefficient table includes the value of each coefficient, standard errors, and t value, which is simply the ratio of the coefficient to its standard error. 
+
+One notes the estimates for the six intercepts (for each one-point step in quality improvement, from 3 to 9), which are sometimes called cutpoints. The intercepts indicate where the latent variable is cut to make the seven groups that we observe in our data. 
+
+There is no significance test in the 'polr' function by default, but we can generate p-values by comparing the t-value against the standard normal distribution, like a z test. Of course this is only true with infinite degrees of freedom, but is reasonably approximated by large samples (in this dataset, nrow(white) = 4898). 
+
+```{r}
+ctable <- coef(summary(m1))
+## calculate and store p values
+p <- pnorm(abs(ctable[, "t value"]), lower.tail = FALSE) * 2
+ctable <- cbind(ctable, "p value" = p)
+ctable
+```
+
+Below, we computer coefficients, which are called proportional odds ratios (OR) and we would interpret these pretty much as we would odds ratios from a binary logistic regression.
+
+```{r}
+ci <- confint(m1)
+exp(cbind(OR = coef(m1), ci))
+```
+
