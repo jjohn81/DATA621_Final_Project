@@ -1,0 +1,149 @@
+---
+title: "group project wine quality"
+author: "group 1"
+date: "March 19, 2019"
+output: html_document
+---
+
+```{r, echo=FALSE, warning=FALSE, message=FALSE}
+library(kernlab)
+library(car)
+library(caret)
+library(corrplot)
+library(data.table)
+library(dplyr)
+library(geoR)
+library(ggplot2)
+library(grid)
+library(gridExtra)
+library(knitr)
+library(MASS)
+library(naniar)
+library(nortest)
+library(psych)
+library(randomForest)
+library(testthat)
+library(kknn)
+```
+
+```{r}
+#loading white wine data from github (raw)
+white <- data.frame(read.csv("https://raw.githubusercontent.com/jjohn81/DATA621_Final_Project/master/winequality-white.csv", sep = ";"))
+```
+
+
+```{r}
+names(white)
+```
+```{r}
+white$citric.acid <-NULL
+white$free.sulfur.dioxide <-NULL
+white$total.sulfur.dioxide <-NULL
+white$sulphates <-NULL
+```
+
+```{r}
+white2 <- white
+```
+
+```{r}
+#quality of whites from 3 to 9 (mean = 5.878)
+summary(white2)
+```
+
+
+```{r}
+vis_miss(white)
+```
+no missing data
+
+# Data Visualizations (to fill in) - boxplots, etc. 
+
+# Scatterplot matrix
+```{r}
+panel.cor <- function(x, y, digits=2, prefix="", cex.cor, ...)
+{
+  usr <- par("usr"); on.exit(par(usr))
+  par(usr = c(0, 1, 0, 1))
+  r <- abs(cor(x, y))
+  txt <- format(c(r, 0.123456789), digits=digits)[1]
+  txt <- paste(prefix, txt, sep="")
+  if(missing(cex.cor)) cex.cor <- 0.8/strwidth(txt)
+  text(0.5, 0.5, txt, cex = cex.cor * r)
+}
+
+pairs(~quality + fixed.acidity + volatile.acidity + citric.acid + residual.sugar + 
+        chlorides + free.sulfur.dioxide + total.sulfur.dioxide + density +pH + 
+        sulphates + alcohol, data = white,
+      lower.panel=panel.smooth, upper.panel=panel.cor, pch=20, main="White Wines Scatterplot Matrix")
+```
+
+
+
+
+#Model Build:k-nearest neighbours
+```{r}
+white2$quality <- as.factor(white2$quality)
+inTrain <- createDataPartition(white2$quality, p = 2/3, list = F)
+train.white2 <- white2[inTrain,]
+test.white2 <- white2[-inTrain,]
+```
+
+From the box plot, we found that citric.acid, free.sulfur.dioxide, and sulphates had very weak correlations with quality. So linear and/or regression methods might not the best choice for this data. We used non-linear feature selection methods.
+
+
+#k-nearest neighbours has the follwoign features.
+No assumptions about data???-???useful, for example, for nonlinear data
+Simple algorithm???-???to explain and understand/interpret
+High accuracy (relatively)???-???it is pretty high but not competitive in comparison to better supervised learning models
+Versatile???-???useful for classification or regression
+
+
+For k-nearest neighbours, 5 kmax, 2 distance, and 3 kernel values will be used. For the distance value, 1 is the Mahalanobis distance, and 2 is the Euclidian distance.
+
+hamming Distance: Calculate the distance between real vectors using the sum of their absolute difference. 
+
+Euclidean distance is calculated as the square root of the sum of the squared differences between a new point (x) and an existing point (xi) across all input attributes j.
+
+```{r}
+t.ctrl <- trainControl(method = "repeatedcv", number = 5, repeats = 5)
+kknn.grid <- expand.grid(kmax = c( 7 ,9, 11,13,15), distance = c(1, 2),
+                         kernel = c("rectangular", "gaussian", "cos"))
+kknn.train <- train(quality ~ ., data = train.white2, method = "kknn",
+                    trControl = t.ctrl, tuneGrid = kknn.grid,
+                    preProcess = c("center", "scale"))
+plot(kknn.train)
+```
+```{r}
+kknn.train$bestTune
+```
+
+Using a distance of 1 by cos kernel outperformed the alternatives. The best value for k was 7.
+
+
+#Model Selection
+```{r}
+kknn.predict <- predict(kknn.train, test.white2)
+confusionMatrix(kknn.predict, test.white2$quality)
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
