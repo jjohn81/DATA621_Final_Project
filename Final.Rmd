@@ -7,6 +7,7 @@ output: html_document
 library(tidyverse)
 library(caret)
 library(corrplot)
+library(MASS)
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
@@ -81,4 +82,44 @@ corrplot(cor(white[1:12]))
 ```
 
 #### Research Question
-  What are modling?
+
+
+```{r}
+white <- white[,1:12]
+white$quality <- as.factor(white$quality )
+
+```
+
+
+
+
+```{r}
+
+set.seed(100)
+trainingRows <- sample(1:nrow(white), 0.7 * nrow(white))
+trainingData <- white[trainingRows, ]
+testData <- white[-trainingRows, ]
+
+```
+
+```{r}
+fullModel <- polr(quality ~. , data = trainingData, Hess=TRUE)
+summary(fullModel)
+
+```
+
+```{r}
+p <- predict(fullModel, testData)
+confusionMatrix(p, testData$quality)
+```
+
+```{r}
+stepModel <- step(m)
+
+```
+```{r}
+p <- predict(stepModel, testData)
+confusionMatrix(p, testData$quality)
+```
+
+ 
