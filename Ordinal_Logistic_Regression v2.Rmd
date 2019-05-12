@@ -1,0 +1,428 @@
+---
+title: "CUNY621_FinalProject"
+author: "Critical Thinking Group One"
+date: "April 14, 2019"
+output:
+  html_document:
+    theme: lumen
+  pdf_document: yes
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(MASS)
+library(car)
+library(caret)
+library(vcd)
+library(ggplot2)
+library(rms)
+library(Hmisc)
+```
+
+
+
+
+
+
+
+
+```{r}
+a <- ggplot(white, aes(x = fixed.acidity))
+a + geom_density(aes(fill = factor(quality)), alpha=0.4)
+```
+
+```{r}
+a <- ggplot(white, aes(x = volatile.acidity))
+a + geom_density(aes(fill = factor(quality)), alpha=0.4)
+```
+
+```{r}
+a <- ggplot(white, aes(x = citric.acid))
+a + geom_density(aes(fill = factor(quality)), alpha=0.4)
+```
+
+```{r}
+a <- ggplot(white, aes(x = residual.sugar))
+a + geom_density(aes(fill = factor(quality)), alpha=0.4)
+```
+
+```{r}
+a <- ggplot(white, aes(x = chlorides))
+a + geom_density(aes(fill = factor(quality)), alpha=0.4)
+```
+
+
+```{r}
+a <- ggplot(white, aes(x = free.sulfur.dioxide))
+a + geom_density(aes(fill = factor(quality)), alpha=0.4)
+```
+
+```{r}
+a <- ggplot(white, aes(x = total.sulfur.dioxide))
+a + geom_density(aes(fill = factor(quality)), alpha=0.4)
+```
+
+```{r}
+a <- ggplot(white, aes(x = density))
+a + geom_density(aes(fill = factor(quality)), alpha=0.4)
+```
+
+```{r}
+a <- ggplot(white, aes(x = pH))
+a + geom_density(aes(fill = factor(quality)), alpha=0.4)
+```
+
+```{r}
+a <- ggplot(white, aes(x = sulphates))
+a + geom_density(aes(fill = factor(quality)), alpha=0.4)
+```
+
+```{r}
+a <- ggplot(white, aes(x = alcohol))
+a + geom_density(aes(fill = factor(quality)), alpha=0.4)
+```
+
+
+
+```{r}
+ggplot(white, aes(pH, quality)) +
+geom_jitter(aes(color = quality), size = 0.5)
+```
+
+
+The density of alcohol is less than water and the density of sugar is more than water. 
+
+```{r}
+ggplot(white, aes(density, quality)) +
+geom_jitter(aes(color = quality), size = 0.5)
+```
+
+
+```{r}
+ggplot(white, aes(alcohol, quality)) +
+geom_jitter(aes(color = quality), size = 0.5)
+```
+
+```{r}
+a <- ggplot(white, aes(x= factor(quality), y  = citric.acid, col=factor(quality)))
+a  + geom_jitter(position = position_jitter(0.2)) + geom_violin(trim = FALSE)
+```
+
+
+
+#### Ordinal Logistic Regression
+
+We wish to compare the KNN model to an Ordinal Logistic Regression for model selection purposes. To do so we must first ensure the levels of the quality column are set as factors in order from worst to best.
+
+
+```{r}
+white_all <- data.frame(read.csv("https://raw.githubusercontent.com/jjohn81/DATA621_Final_Project/master/winequality-white.csv", sep = ";"))
+white_all$quality <- factor(white_all$quality)
+levels(white_all$quality)
+```
+
+
+__Creating a training set__
+
+```{r}
+smp_size <- floor(0.85 * nrow(white))
+
+## set the seed to make your partition reproducible
+set.seed(123)
+train_ind <- sample(seq_len(nrow(white_all)), size = smp_size)
+
+white <- white_all[train_ind, ]
+test <- white_all[-train_ind, ]
+```
+
+
+First we observe the frequency of wine quality ratings for the training set. 
+
+```{r}
+table(factor(white$quality))
+```
+
+
+For Ordinal Logistic Regression, we choose the polr method of MASS package, with method = "logistic". We could have also used the vglm() function from the VGAM package, lrm() from the rms package, and clm() from the ordinal package. 
+
+The model takes the form
+
+$logit(p(Y???g))=??_0_g???(??_1X_1+???+??_pX_p)(g=1,.,k???1)$
+
+
+```{r}
+mod.fit.ord <- polr(formula = quality ~ ., data=white, method= "logistic" )
+summary(mod.fit.ord)
+```
+
+This regression output coefficient table includes the value of each coefficient, standard errors, and t value, which is simply the ratio of the coefficient to its standard error. 
+
+One notes the estimates for the six intercepts (for each one-point step in quality improvement, from 3 to 9), which are sometimes called cutpoints. The intercepts indicate where the latent variable is cut to make the seven groups that we observe in our data. 
+
+#### Removing variables through Anova and p-value calculation
+
+No matter which method is chosen (probit, loglog, clogclog), the same three covariates are shown lacking in significance: citric.acid, chlorides, total.sulfur.dioxide. To determine that we inspect the Analysis of Deviance Table, 
+
+
+```{r}
+Anova(mod.fit.ord)
+```
+
+as well as by calculating p-values directly. 
+
+There is no significance test in the 'polr' function by default, but we can generate p-values by comparing the t-value against the standard normal distribution, like a z test. Of course this is only true with infinite degrees of freedom, but is reasonably approximated by large samples (in this dataset, nrow(white) = 4898). 
+
+```{r}
+ctable <- coef(summary(mod.fit.ord))
+## calculate and store p values
+p <- pnorm(abs(ctable[, "t value"]), lower.tail = FALSE) * 2
+ctable <- round(cbind(ctable, "p value" = p),4)
+ctable
+```
+
+
+We note that the full model yields:
+Residual Deviance: 9262.297 
+AIC: 9296.297 
+
+Our improved model removes three explanatory variables and Residual Deviance and AIC are only slightly less favorable. 
+
+```{r}
+mod.fit.ord2 <- polr(formula = quality ~ .-citric.acid-chlorides-total.sulfur.dioxide, data=white, method= "logistic" )
+summary(mod.fit.ord2)
+```
+
+
+Anova reveals the significance of all the remaining explanatory variables. 
+
+```{r}
+Anova(mod.fit.ord2)
+```
+
+We seek to improve our model further by testing for multicolinearity.
+
+From the correlation matrix, we note strong associations between the following:
+fixed.acidity and pH (-0.43)
+residual.sugar and density (+0.84)
+residual.sugar and alcohol (-0.45)
+density and alcohol (-0.78)
+
+
+```{r}
+cor(white2[,1:8])
+```
+
+It is interesting to note the apparent inverse relationship between residual sugar and alcohol.  Rough rules of thumb say if a wine's alcohol content is 10% or less it will have sweet characteristics. Wines that are even lower (especially down around 8 or 9 percent) will definitely be sweet.
+
+One would suspect the more residual sugar, the lower the potential alcohol that wine could have, since sugar is converted into alcohol in the fermentation process.
+
+Sugar's role in dictating the final alcohol content of the wine (and such its resulting body and "mouth-feel") sometimes encourages winemakers to add sugar (usually sucrose) during winemaking in a process known as chaptalization solely in order to boost the alcohol content - chaptalization does not increase the sweetness of a wine.
+
+Grape juice is more dense than water. Thus before we fermented the grape juice the specific gravity was over 1.0. As the yeast converted the sugar into alcohol and carbon dioxide during fermentation, the density of the wine has been decreasing. A specific gravity less than 0.990 tells us that the primary fermentation has slowed down enough that racking is necessary.
+
+```{r}
+plot(residual.sugar, alcohol)
+```
+
+The following table gives the mean values for each of the covariates at each quality level. 
+
+```{r, include=FALSE}
+df3<- NULL
+a <- NULL
+for (j in 1:length(lvl)){
+    a[j] <- mean(white2$fixed.acidity[white2$quality == lvl[j]])}
+
+b <- NULL
+for (j in 1:length(lvl)){
+    b[j] <- mean(white2$volatile.acidity[white2$quality == lvl[j]])}
+
+c <- NULL
+for (j in 1:length(lvl)){
+    c[j] <- mean(white2$residual.sugar[white2$quality == lvl[j]])}
+
+d <- NULL
+for (j in 1:length(lvl)){
+    d[j] <- mean(white2$free.sulfur.dioxide[white2$quality == lvl[j]])}
+
+e <- NULL
+for (j in 1:length(lvl)){
+    e[j] <- mean(white2$density[white2$quality == lvl[j]])}
+
+f <- NULL
+for (j in 1:length(lvl)){
+    f[j] <- mean(white2$pH[white2$quality == lvl[j]])}
+
+g <- NULL
+for (j in 1:length(lvl)){
+    g[j] <- mean(white2$sulphates[white2$quality == lvl[j]])}
+
+h <- NULL
+for (j in 1:length(lvl)){
+    h[j] <- mean(white2$alcohol[white2$quality == lvl[j]])}
+
+
+df3 <- t(data.frame(rbind(a,b,c,d,e,f,g,h)))
+colnames(df3) <- names(white2[1:8])
+row.names(df3) <- lvl
+df3
+```
+
+
+DUe to important interplay between residual.sugar, density and alcohol, we refine our model by adding an interaction between these interrelated components. 
+
+
+```{r}
+mod.fit.ord3 <- polr(formula = quality ~ .+fixed.acidity*pH+residual.sugar*alcohol+ residual.sugar*density+ density*alcohol-citric.acid-chlorides-total.sulfur.dioxide, data=white, method= "logistic" )
+summary(mod.fit.ord3)
+```
+
+```{r}
+Anova(mod.fit.ord3)
+```
+
+Now all components are highly significant, and both Residual Deviance and AIC have gone down. 
+Residual Deviance: 9259.631 
+AIC: 9295.631 
+
+To determine our model's accuracy, we create a confusion matrix for it, comparing actual versus predicted quality ratings. 
+
+
+```{r}
+attach(white)
+pred <- predict(object=mod.fit.ord3, type="class")
+cmatrix.t <- t(table(quality,pred))
+Caret_cmat <- confusionMatrix(cmatrix.t)
+Caret_cmat 
+
+```
+
+Our model has an accuracy of 51.8%. It predicts only 2 out of 163 actual "4"s and only 13 out of 175 actual "8"s. In this model specificity surpasses sensitivity for all levels except average ("6"), suggesting that there are many false results for above-average wines, this is the model fails to have much predictive value for qualities other than "5" and "6". Far too many superior wines were classified as average under the model. 
+
+One interpretation is that our model is still not sensitive enough to density and pH and alcohol, which are monotonous decreasing, increasing and increasing respectively as quality increases. That is as density goes down and pH and alcohol go up, quality improves at each threshold when removing the highly inferior "3" and "4" quality levels. 
+
+The red and blue areas of this mosaic plot reveals the "blind spots" of the model, extreme values of Pearson residuals, indicating a large discrepancy between observed and expected values. If red, the cell's observed frequency is less than the expected frequency, meaning false "5"s when the actual quality rating is "6" and false "6"s when the quality rating is "5".
+
+```{r}
+mosaic(cmatrix.t , shade=TRUE, legend=TRUE) 
+```
+
+In the rms package, we apply the plot.xmean.ordinaly() function. Separately for each predictor variable X in a formula, it plots the mean of X vs. levels of Y. Then under the proportional odds assumption, the expected value of the predictor for each Y value is also plotted (as a dotted line).
+
+
+```{r}
+
+plot.xmean.ordinaly(mod.fit.ord3, white2)
+```
+
+
+
+### Cumulative Density Functions [to complete]
+
+[create plots]
+
+library(stats)
+f1 <- ecdf(q3)
+plot(f1)
+plot(predict(mod.fit.ord),white2$quality)
+
+curve(expr = plogis(q= int[1] - beta[1]*white$fixed.acidity - beta[2]*white$residual.sugar - beta[3]*white$free.sulfur.dioxide - beta[4]*white$density - beta[5]*white$pH - beta[6]*white$sulphates - beta[7]*white$alcohol) , xlim = x.range, ylab = expression(P(Y<=j)),
+    xlab = expression(x[1]), main = "Cumulative probabilities for Y", lwd = 2)
+
+
+
+
+#### Collapsing the categories
+
+We wish to next determine if the model shows improved accuracy when collapsing the categories, particularly the sparse extreme low and high quality wines. 
+
+
+```{r}
+white3 <- white2
+white3$quality[white3$quality == "3"] <- "4"
+white3$quality[white3$quality == "9"] <- "8"
+table(white3$quality)
+white3$quality <- factor(white3$quality)
+levels(white3$quality) 
+```
+
+
+inferior = 3,4
+subpar = 5
+average = 6
+abovepar = 7
+superior = 8,9
+
+
+```{r}
+mod.fit.ord5 <- polr(formula = quality ~ .-citric.acid-chlorides-total.sulfur.dioxide, data=white3, method= "logistic" )
+summary(mod.fit.ord5)
+```
+
+
+```{r}
+pred <- predict(object=mod.fit.ord5, type="class")
+cmatrix.t2 <- t(table(white3$quality,pred))
+Caret_cmat2 <- confusionMatrix(cmatrix.t2)
+Caret_cmat2
+```
+
+Accuracy remains 0.52, but whereas before we predicted 6 "8"s, now only one is predicted. We perform slightly better with "4"s.
+
+Further collapsing the variables to only three categories, "below average" (3-5), "average" (6), "above average" (7-9),
+
+```{r}
+white4 <- white3
+white4$quality[white4$quality == "4"] <- "5"
+white4$quality[white4$quality == "8"] <- "7"
+table(white4$quality)
+white4$quality <- factor(white4$quality)
+levels(white4$quality) 
+```
+
+
+```{r}
+mod.fit.ord6 <- polr(formula = quality ~ .-citric.acid-chlorides-total.sulfur.dioxide, data=white4, method= "logistic" )
+summary(mod.fit.ord6)
+```
+
+One notes that the measures of model fidelity (residual deviance and AIC) improve greatly with the condensation into three categories. Residual Deviance goes from 10727.87 to 8660.671, while AIC goes from 10751.87 to 8680.671.
+
+
+```{r}
+pred <- predict(object=mod.fit.ord6, type="class")
+cmatrix.t3 <- t(table(white4$quality,pred))
+Caret_cmat3 <- confusionMatrix(cmatrix.t3)
+Caret_cmat3 
+```
+
+Accuracy now improved to 55.7%.
+
+
+
+#### Checking the proportional odds assumption
+
+One of the assumptions underlying ordinal logistic (and ordinal probit) regression is that the relationship between each pair of outcome groups is the same. In other words, ordinal logistic regression assumes that the coefficients that describe the relationship between, say, the lowest versus all higher categories of the response variable are the same as those that describe the relationship between the next lowest category and all higher categories, etc. This is called the proportional odds assumption or the parallel regression assumption. Because the relationship between all pairs of groups is the same, there is only one set of coefficients. If this was not the case, we would need different sets of coefficients in the model to describe the relationship between each pair of outcome groups. Thus, in order to asses the appropriateness of our model, we need to evaluate whether the proportional odds assumption is tenable. 
+
+[ to be completed]
+
+
+```{r}
+# attach(white2)
+# sf <- function(y) {
+#   c('Y>=3' = qlogis(mean(quality >= 3)),
+#     'Y>=4' = qlogis(mean(quality >= 4)),
+#     'Y>=5' = qlogis(mean(quality >= 5)),
+#     'Y>=6' = qlogis(mean(quality >= 6)),
+#     'Y>=7' = qlogis(mean(quality >= 7)),
+#     'Y>=8' = qlogis(mean(quality >= 8)))
+# }
+# 
+# (s <- with(white2, summary(as.numeric(quality) ~ fixed.acidity + volatile.acidity + residual.sugar + free.sulfur.dioxide + density + pH + sulphates + alcohol, fun=sf)))
+# ## (s <- with(white2, summary(as.numeric(quality) ~., fun=sf)))
+```
+
+
+
+
+
+
